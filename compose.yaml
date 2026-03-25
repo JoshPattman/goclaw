@@ -1,0 +1,10 @@
+services:
+  goclaw:
+    build:
+      context: .
+      dockerfile: dockerfile
+    image: craig:latest
+    container_name: goclaw
+    restart: unless-stopped
+    volumes:
+      - ${HOME}/goclaw-data:/goclaw-data
