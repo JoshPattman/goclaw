@@ -17,9 +17,13 @@ type Data struct {
 }
 
 func UpdateConfig(root string) error {
+	err := os.MkdirAll(root, 0775)
+	if err != nil {
+		return err
+	}
 	filename := path.Join(root, configFileName)
 	data := defaultConfig()
-	err := func() error {
+	err = func() error {
 		f, err := os.Open(filename)
 		if errors.Is(err, os.ErrNotExist) {
 			return nil

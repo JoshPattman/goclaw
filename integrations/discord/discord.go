@@ -3,6 +3,7 @@ package discord
 import (
 	"fmt"
 	"goclaw/agent"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -37,15 +38,28 @@ func (d *DiscordSession) Close() error {
 }
 
 func (d *DiscordSession) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	// Ignore bots (including ourselves)
-	if m.Author.Bot {
+	if m.Author.ID == s.State.User.ID {
 		return
 	}
 
+	members, err := s.GuildMembers(m.GuildID, "", 1000)
+	if err != nil {
+		panic(err)
+	}
+	membersStrs := []string{}
+	for _, member := range members {
+		if member.User.ID == m.Author.ID {
+			membersStrs = append(membersStrs, fmt.Sprintf("%s (this is you)", member.User.DisplayName()))
+		} else {
+			membersStrs = append(membersStrs, member.User.DisplayName())
+		}
+	}
+
 	content := fmt.Sprintf(
-		"ChannelID: %s\nAuthor: %s\nContent: %s",
+		"ChannelID: %s (with members %s)\nAuthor: %s\nContent: %s",
 		m.ChannelID,
-		m.Author.Username,
+		strings.Join(membersStrs, ", "),
+		m.Author.DisplayName(),
 		m.Content,
 	)
 
