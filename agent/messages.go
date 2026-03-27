@@ -3,8 +3,6 @@ package agent
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
-	"strings"
 
 	"github.com/JoshPattman/jpf"
 )
@@ -17,24 +15,25 @@ type eventsMessage struct {
 	events []Event
 }
 
-func eventToString(e Event) string {
-	return fmt.Sprintf("Event of kind '%s':\n```event\n%s\n```", e.Kind, e.Content)
+type eventsLLMObject struct {
+	Preamble string  `json:"preamble"`
+	Events   []Event `json:"events"`
 }
 
 func (msg eventsMessage) Message() jpf.Message {
-	eventStrings := make([]string, len(msg.events))
-	for i, e := range msg.events {
-		eventStrings[i] = eventToString(e)
+	obj := eventsLLMObject{
+		"In the time since your last message, the following events have occured. They may or may not require to to perform actions to handle them.",
+		msg.events,
 	}
 
-	content := fmt.Sprintf(
-		"The following events have occured:\n\n%s",
-		strings.Join(eventStrings, "\n\n"),
-	)
+	content, err := json.MarshalIndent(obj, "", "    ")
+	if err != nil {
+		panic(err)
+	}
 
 	return jpf.Message{
 		Role:    jpf.UserRole,
-		Content: content,
+		Content: string(content),
 	}
 }
 
@@ -68,20 +67,26 @@ type topolResponseMessage struct {
 	Responses []string
 }
 
+type toolResponseObj struct {
+	Preamble      string   `json:"preamble"`
+	ToolResponses []string `json:"tool_responses"`
+}
+
 func (msg topolResponseMessage) Message() jpf.Message {
-	formatted := make([]string, len(msg.Responses))
-	for i, r := range msg.Responses {
-		formatted[i] = fmt.Sprintf("```tool_response\n%s\n```", r)
+	obj := toolResponseObj{
+		"The following are responses from the tools you called, in the same order you called them",
+		nil,
 	}
-
-	content := fmt.Sprintf(
-		"The following tool responses were produced:\n\n%s",
-		strings.Join(formatted, "\n\n"),
-	)
-
+	for _, r := range msg.Responses {
+		obj.ToolResponses = append(obj.ToolResponses, r)
+	}
+	content, err := json.MarshalIndent(obj, "", "    ")
+	if err != nil {
+		panic(err)
+	}
 	return jpf.Message{
 		Role:    jpf.AssistantRole,
-		Content: content,
+		Content: string(content),
 	}
 }
 

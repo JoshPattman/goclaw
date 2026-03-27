@@ -3,7 +3,6 @@ package discord
 import (
 	"fmt"
 	"goclaw/agent"
-	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -37,6 +36,20 @@ func (d *DiscordSession) Close() error {
 	return d.sess.Close()
 }
 
+type DiscordMessageEvent struct {
+	YourUserName          string                 `json:"your_user_name"`
+	ChannelID             string                 `json:"channel_id"`
+	ChannelName           string                 `json:"channel_name"`
+	ChannelMembers        []DiscordChannelMember `json:"all_channel_members"`
+	MessageAuthorUserName string                 `json:"message_author_user_name"`
+	MessageContent        string                 `json:"message_content"`
+}
+
+type DiscordChannelMember struct {
+	UserName    string `json:"user_name"`
+	DisplayName string `json:"display_name"`
+}
+
 func (d *DiscordSession) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
@@ -46,24 +59,29 @@ func (d *DiscordSession) onMessageCreate(s *discordgo.Session, m *discordgo.Mess
 	if err != nil {
 		panic(err)
 	}
-	membersStrs := []string{}
+	membersStrs := []DiscordChannelMember{}
 	for _, member := range members {
-		if member.User.ID == m.Author.ID {
-			membersStrs = append(membersStrs, fmt.Sprintf("%s (this is you)", member.User.DisplayName()))
-		} else {
-			membersStrs = append(membersStrs, member.User.DisplayName())
-		}
+		membersStrs = append(membersStrs, DiscordChannelMember{
+			member.User.Username,
+			member.User.DisplayName(),
+		})
 	}
 
-	content := fmt.Sprintf(
-		"ChannelID: %s (with members %s)\nAuthor: %s\nContent: %s",
-		m.ChannelID,
-		strings.Join(membersStrs, ", "),
-		m.Author.DisplayName(),
-		m.Content,
-	)
+	channel, err := s.Channel(m.ChannelID)
+	if err != nil {
+		panic(err)
+	}
 
-	d.events <- agent.E("discord_message", content)
+	event := DiscordMessageEvent{
+		s.State.User.Username,
+		m.ChannelID,
+		channel.Name,
+		membersStrs,
+		m.Author.Username,
+		m.Content,
+	}
+
+	d.events <- agent.E("discord_message_recv", event)
 }
 
 func (d *DiscordSession) GetTool() agent.Tool {
