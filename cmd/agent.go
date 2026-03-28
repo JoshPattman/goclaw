@@ -3,6 +3,7 @@ package main
 import (
 	"goclaw/agent"
 	"goclaw/integrations/discord"
+	"goclaw/integrations/filesystem"
 	"goclaw/integrations/reminders"
 	"goclaw/integrations/scratchpad"
 	"log/slog"
@@ -36,5 +37,6 @@ func CreateAgent(data Data) (*agent.Agent, error) {
 	reminderTool := reminders.New(ag.Events())
 
 	ag.AddTools(discordSend, reminderTool, spRead, spWrite)
+	ag.AddTools(filesystem.Tools()...)
 	return ag, nil
 }

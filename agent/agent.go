@@ -140,6 +140,7 @@ func (a *Agent) processUntilDone() error {
 				responses = append(responses,
 					fmt.Sprintf("Tool '%s' not found", call.ToolName),
 				)
+				a.logger.Warn("a tool was not found", "tool", call.ToolName)
 				continue
 			}
 
