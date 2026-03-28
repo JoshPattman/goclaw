@@ -63,7 +63,7 @@ func (msg toolCallsMessage) Message() jpf.Message {
 	}
 }
 
-type topolResponseMessage struct {
+type toolResponseMessage struct {
 	Responses []string
 }
 
@@ -72,7 +72,7 @@ type toolResponseObj struct {
 	ToolResponses []string `json:"tool_responses"`
 }
 
-func (msg topolResponseMessage) Message() jpf.Message {
+func (msg toolResponseMessage) Message() jpf.Message {
 	obj := toolResponseObj{
 		"The following are responses from the tools you called, in the same order you called them",
 		nil,
@@ -87,6 +87,15 @@ func (msg topolResponseMessage) Message() jpf.Message {
 	return jpf.Message{
 		Role:    jpf.AssistantRole,
 		Content: string(content),
+	}
+}
+
+type needToEndMessage struct{}
+
+func (needToEndMessage) Message() jpf.Message {
+	return jpf.Message{
+		Role:    jpf.SystemRole,
+		Content: "You called no tools, however you will continue iterating (calling no tools is not a useful thing to do). To stop iterating, please call the end_iteration tool by itself with no args.",
 	}
 }
 

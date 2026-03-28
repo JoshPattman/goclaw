@@ -51,7 +51,9 @@ func (a *Agent) AddTools(tools ...Tool) {
 	for _, t := range tools {
 		a.tools[t.Name()] = t
 	}
-	a.addEventsMessage(toolChangeEvent{slices.Collect(maps.Values(a.tools))})
+	a.addEventsMessage(toolChangeEvent{
+		slices.Collect(maps.Values(a.tools)),
+	})
 	a.logger.Info("changed tools", "active_tools", slices.Collect(maps.Keys(a.tools)))
 }
 
@@ -99,6 +101,8 @@ func (a *Agent) clearIfTooLong() {
 	}
 }
 
+const doneToolName = "end_iteration"
+
 func (a *Agent) processUntilDone() error {
 	a.logger.Info("processing events")
 	for {
@@ -110,7 +114,12 @@ func (a *Agent) processUntilDone() error {
 		a.history = append(a.history, result)
 
 		if len(result.ToolCalls) == 0 {
-			a.logger.Info("done processing events because agent called no tools")
+			a.logger.Info("agent called no tools so we need to remind it this is not how it stops processing")
+			a.addHistory(needToEndMessage{})
+			continue
+		}
+		if len(result.ToolCalls) == 1 && result.ToolCalls[0].ToolName == doneToolName {
+			a.logger.Info("agent called end iteration tool so we can stop")
 			return nil
 		}
 
@@ -123,6 +132,9 @@ func (a *Agent) processUntilDone() error {
 		responses := make([]string, 0, len(result.ToolCalls))
 
 		for _, call := range result.ToolCalls {
+			if call.ToolName == doneToolName {
+				responses = append(responses, "You can only call the end iteration tool by itself - you cannot call other tools at the same time as it")
+			}
 			tool, ok := a.tools[call.ToolName]
 			if !ok {
 				responses = append(responses,
@@ -141,13 +153,14 @@ func (a *Agent) processUntilDone() error {
 				responses = append(responses,
 					fmt.Sprintf("Tool '%s' error: %v", call.ToolName, err),
 				)
+				a.logger.Warn("a tool errored", "tool", call.ToolName, "err", err)
 				continue
 			}
 
 			responses = append(responses, out)
 		}
 
-		a.history = append(a.history, topolResponseMessage{
+		a.history = append(a.history, toolResponseMessage{
 			Responses: responses,
 		})
 	}

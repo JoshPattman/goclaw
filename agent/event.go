@@ -43,7 +43,12 @@ func (toolChangeEvent) EventKind() EventKind {
 }
 
 func (e toolChangeEvent) EventData() map[string]any {
-	toolDescs := []map[string]any{}
+	toolDescs := []map[string]any{
+		{
+			"tool_name":   doneToolName,
+			"description": "Call this tool with no arguments when you think no more actions are required to handle the events. You can only call this tool by itself.",
+		},
+	}
 	for _, t := range e.tools {
 		toolDescs = append(toolDescs, map[string]any{
 			"tool_name":   t.Name(),
