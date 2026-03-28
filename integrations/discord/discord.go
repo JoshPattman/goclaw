@@ -36,16 +36,31 @@ func (d *DiscordSession) Close() error {
 	return d.sess.Close()
 }
 
-type DiscordMessageEvent struct {
-	YourUserName          string                 `json:"your_user_name"`
-	ChannelID             string                 `json:"channel_id"`
-	ChannelName           string                 `json:"channel_name"`
-	ChannelMembers        []DiscordChannelMember `json:"all_channel_members"`
-	MessageAuthorUserName string                 `json:"message_author_user_name"`
-	MessageContent        string                 `json:"message_content"`
+type discordMessageEvent struct {
+	YourUserName          string
+	ChannelID             string
+	ChannelName           string
+	ChannelMembers        []discordChannelMember
+	MessageAuthorUserName string
+	MessageContent        string
 }
 
-type DiscordChannelMember struct {
+func (e discordMessageEvent) EventKind() agent.EventKind {
+	return "discord_message_recv"
+}
+
+func (e discordMessageEvent) EventData() map[string]any {
+	return map[string]any{
+		"your_user_name":           e.YourUserName,
+		"channel_id":               e.ChannelID,
+		"channel_name":             e.ChannelName,
+		"channel_members":          e.ChannelMembers,
+		"message_author_user_name": e.MessageAuthorUserName,
+		"message_content":          e.MessageContent,
+	}
+}
+
+type discordChannelMember struct {
 	UserName    string `json:"user_name"`
 	DisplayName string `json:"display_name"`
 }
@@ -59,9 +74,9 @@ func (d *DiscordSession) onMessageCreate(s *discordgo.Session, m *discordgo.Mess
 	if err != nil {
 		panic(err)
 	}
-	membersStrs := []DiscordChannelMember{}
+	membersStrs := []discordChannelMember{}
 	for _, member := range members {
-		membersStrs = append(membersStrs, DiscordChannelMember{
+		membersStrs = append(membersStrs, discordChannelMember{
 			member.User.Username,
 			member.User.DisplayName(),
 		})
@@ -72,7 +87,7 @@ func (d *DiscordSession) onMessageCreate(s *discordgo.Session, m *discordgo.Mess
 		panic(err)
 	}
 
-	event := DiscordMessageEvent{
+	event := discordMessageEvent{
 		s.State.User.Username,
 		m.ChannelID,
 		channel.Name,
@@ -81,7 +96,7 @@ func (d *DiscordSession) onMessageCreate(s *discordgo.Session, m *discordgo.Mess
 		m.Content,
 	}
 
-	d.events <- agent.E("discord_message_recv", event)
+	d.events <- event
 }
 
 func (d *DiscordSession) GetTool() agent.Tool {

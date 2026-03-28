@@ -36,7 +36,21 @@ func (t *tool) Call(args map[string]any) (string, error) {
 	delay := time.Duration(ad.Delay*1000) * time.Millisecond
 	go func() {
 		time.Sleep(delay)
-		t.events <- agent.E("delayed_event", ad.Message)
+		t.events <- reminderEvent{ad.Message}
 	}()
 	return fmt.Sprintf("event scheduled in %f seconds", ad.Delay), nil
+}
+
+type reminderEvent struct {
+	message string
+}
+
+func (e reminderEvent) EventKind() agent.EventKind {
+	return "reminder"
+}
+
+func (e reminderEvent) EventData() map[string]any {
+	return map[string]any{
+		"reminder_message": e.message,
+	}
 }

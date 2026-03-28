@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/JoshPattman/jpf"
@@ -50,14 +51,12 @@ func (a *Agent) AddTools(tools ...Tool) {
 	for _, t := range tools {
 		a.tools[t.Name()] = t
 	}
-	prompt := buildChangeToolsPrompt(slices.Collect(maps.Values(a.tools)))
-	a.addEventsMessage(E(EventKind("available_tools_change"), prompt))
+	a.addEventsMessage(toolChangeEvent{slices.Collect(maps.Values(a.tools))})
 	a.logger.Info("changed tools", "active_tools", slices.Collect(maps.Keys(a.tools)))
 }
 
 func (a *Agent) SetPersonality(personality string) {
-	prompt := fmt.Sprintf("You will act with the foillowing personality from now on: %s", personality)
-	a.addEventsMessage(E(EventKind("personality_instruction"), prompt))
+	a.addEventsMessage(personalityInstruction{personality})
 	a.logger.Info("personality has been set", "personality", personality)
 }
 
@@ -92,17 +91,10 @@ func (a *Agent) Run() error {
 	}
 }
 
-func (a *Agent) addEventsMessage(events ...Event) {
-	a.history = append(a.history, eventsMessage{events})
-	a.logger.Info("events occured", "n", len(events))
-}
-
 func (a *Agent) clearIfTooLong() {
 	if len(a.history) > a.truncateAtLength {
 		a.history = a.history[len(a.history)-a.truncateToLength:]
-		a.history = append(a.history, eventsMessage{[]Event{
-			E(EventKind("conversation_clipping"), "The conversation has just been truncated (oldest messages were removed). Re-read your system prompt and ensure there is nothing you need to do."),
-		}})
+		a.addEventsMessage(conversationClippedEvent{})
 		a.logger.Info("truncated conversation")
 	}
 }
@@ -118,9 +110,15 @@ func (a *Agent) processUntilDone() error {
 		a.history = append(a.history, result)
 
 		if len(result.ToolCalls) == 0 {
-			a.logger.Info("done processing events")
+			a.logger.Info("done processing events because agent called no tools")
 			return nil
 		}
+
+		toolNames := make([]string, len(result.ToolCalls))
+		for i, t := range result.ToolCalls {
+			toolNames[i] = t.ToolName
+		}
+		a.logger.Info("agent called tools", "tool_names", strings.Join(toolNames, ";"))
 
 		responses := make([]string, 0, len(result.ToolCalls))
 
@@ -153,4 +151,17 @@ func (a *Agent) processUntilDone() error {
 			Responses: responses,
 		})
 	}
+}
+
+func (a *Agent) addEventsMessage(events ...Event) {
+	a.addHistory(eventsMessage{events})
+	eventNames := make([]string, len(events))
+	for i, e := range events {
+		eventNames[i] = string(e.EventKind())
+	}
+	a.logger.Info("events occured", "n", len(events), "names", strings.Join(eventNames, ";"))
+}
+
+func (a *Agent) addHistory(messages ...message) {
+	a.history = append(a.history, messages...)
 }

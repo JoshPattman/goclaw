@@ -2,13 +2,57 @@ package agent
 
 type EventKind string
 
-type Event struct {
-	// Kind can be any value, but should sensibly and concisely describe what the type of data is
-	Kind EventKind `json:"kind"`
-	// Content should be a JSON-encodable data struct
-	Content any `json:"content"`
+type Event interface {
+	EventKind() EventKind
+	EventData() map[string]any
 }
 
-func E(kind EventKind, content any) Event {
-	return Event{kind, content}
+type conversationClippedEvent struct{}
+
+func (conversationClippedEvent) EventKind() EventKind {
+	return "conversation_truncated"
+}
+
+func (conversationClippedEvent) EventData() map[string]any {
+	return map[string]any{
+		"explanation": "The conversation has just been truncated (oldest messages were removed). Re-read your system prompt and ensure there is nothing you need to do.",
+	}
+}
+
+type personalityInstruction struct {
+	personality string
+}
+
+func (personalityInstruction) EventKind() EventKind {
+	return "set_personality"
+}
+
+func (e personalityInstruction) EventData() map[string]any {
+	return map[string]any{
+		"instruction": "Act with this specified personality for further messages in the conversationn the conversation",
+		"personality": e.personality,
+	}
+}
+
+type toolChangeEvent struct {
+	tools []Tool
+}
+
+func (toolChangeEvent) EventKind() EventKind {
+	return "set_available_tools"
+}
+
+func (e toolChangeEvent) EventData() map[string]any {
+	toolDescs := []map[string]any{}
+	for _, t := range e.tools {
+		toolDescs = append(toolDescs, map[string]any{
+			"tool_name":   t.Name(),
+			"description": t.Desc(),
+		})
+	}
+	return map[string]any{
+		"explanation":     "The full list of tools has changed, attached is the list of currently avaialable tools",
+		"instruction":     "From now on, you may only use the following tools in conversation",
+		"available_tools": toolDescs,
+	}
 }
