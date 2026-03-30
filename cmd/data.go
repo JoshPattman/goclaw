@@ -3,17 +3,16 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"goclaw/integrations/scratchpad"
 	"os"
 	"path"
 )
 
 type Data struct {
-	Personality  string
-	ScratchPad   scratchpad.ScratchPad
-	AIToken      string
-	AIModel      string
-	DiscordToken string
+	Personality      string
+	WorkingMemoryLoc string
+	AIToken          string
+	AIModel          string
+	DiscordToken     string
 }
 
 func UpdateConfig(root string) error {
@@ -63,7 +62,7 @@ func LoadData(root string) (Data, error) {
 	}
 	return Data{
 		config.Personality,
-		scratchpad.FileScratchPad(scratchpadPath),
+		scratchpadPath,
 		config.AIToken,
 		config.AIModel,
 		config.DiscordToken,

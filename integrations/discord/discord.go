@@ -45,11 +45,11 @@ type discordMessageEvent struct {
 	MessageContent        string
 }
 
-func (e discordMessageEvent) EventKind() agent.EventKind {
+func (e discordMessageEvent) Kind() string {
 	return "discord_message_recv"
 }
 
-func (e discordMessageEvent) EventData() map[string]any {
+func (e discordMessageEvent) Content() agent.JsonObject {
 	return map[string]any{
 		"your_user_name":           e.YourUserName,
 		"channel_id":               e.ChannelID,
@@ -109,12 +109,11 @@ type DiscordSendMessageTool struct {
 	sess *discordgo.Session
 }
 
-func (t *DiscordSendMessageTool) Name() string {
-	return "discord_send_message"
-}
-
-func (t *DiscordSendMessageTool) Desc() string {
-	return "Send a message to a Discord channel. Args: channel_id (string), content (string)"
+func (t *DiscordSendMessageTool) Def() agent.ToolDef {
+	return agent.ToolDef{
+		Name: "discord_send_message",
+		Desc: "Send a message to a Discord channel. Args: channel_id (string), content (string)",
+	}
 }
 
 func (t *DiscordSendMessageTool) Call(args map[string]any) (string, error) {

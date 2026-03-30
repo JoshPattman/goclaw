@@ -2,15 +2,7 @@ package agent
 
 import "encoding/json"
 
-type Tool interface {
-	Def() ToolDef
-	Call(map[string]any) (string, error)
-}
-
-type ToolDef struct {
-	Name string `json:"name"`
-	Desc string `json:"desc"`
-}
+type JsonObject map[string]any
 
 func ParseToolArgs[T any](args map[string]any) (T, error) {
 	bs, err := json.Marshal(args)
