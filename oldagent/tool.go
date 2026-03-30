@@ -1,15 +1,13 @@
-package agent
+package oldagent
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 type Tool interface {
-	Def() ToolDef
+	Name() string
+	Desc() string
 	Call(map[string]any) (string, error)
-}
-
-type ToolDef struct {
-	Name string `json:"name"`
-	Desc string `json:"desc"`
 }
 
 func ParseToolArgs[T any](args map[string]any) (T, error) {

@@ -1,15 +1,11 @@
-package agent
+package oldagent
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -19,42 +15,51 @@ import (
 	"github.com/JoshPattman/jpf/pipelines"
 )
 
-func New(model jpf.Model, logger *slog.Logger, memoryFile string) *Agent {
+//go:embed system.md
+var defaultPrompt string
+
+func New(model jpf.Model, logger *slog.Logger) *Agent {
 	toolMap := make(map[string]Tool)
-	enc := Encoder(getDefaultPrompt())
+	enc := &msgEncoder{defaultPrompt}
 	pars := parsers.SubstringJsonObject(parsers.NewJson[toolCallsMessage]())
 	pipe := pipelines.NewOneShot(enc, pars, nil, model)
 
 	return &Agent{
 		logger:             logger,
 		events:             make(chan Event),
-		history:            make([]Message, 0),
+		history:            make([]message, 0),
 		pipeline:           pipe,
 		collectionDuration: time.Second,
 		tools:              toolMap,
 		truncateAtLength:   50,
 		truncateToLength:   30,
-		memoryFile:         memoryFile,
 	}
 }
 
 type Agent struct {
 	logger             *slog.Logger
 	events             chan Event
-	history            []Message
-	pipeline           jpf.Pipeline[EncoderInput, toolCallsMessage]
+	history            []message
+	pipeline           jpf.Pipeline[[]message, toolCallsMessage]
 	collectionDuration time.Duration
 	tools              map[string]Tool
 	truncateAtLength   int
 	truncateToLength   int
-	memoryFile         string
 }
 
 func (a *Agent) AddTools(tools ...Tool) {
 	for _, t := range tools {
-		a.tools[t.Def().Name] = t
+		a.tools[t.Name()] = t
 	}
+	a.addEventsMessage(toolChangeEvent{
+		slices.Collect(maps.Values(a.tools)),
+	})
 	a.logger.Info("changed tools", "active_tools", slices.Collect(maps.Keys(a.tools)))
+}
+
+func (a *Agent) SetPersonality(personality string) {
+	a.addEventsMessage(personalityInstruction{personality})
+	a.logger.Info("personality has been set", "personality", personality)
 }
 
 func (a *Agent) Events() chan<- Event { return a.events }
@@ -88,26 +93,20 @@ func (a *Agent) Run() error {
 	}
 }
 
+func (a *Agent) clearIfTooLong() {
+	if len(a.history) > a.truncateAtLength {
+		a.history = a.history[len(a.history)-a.truncateToLength:]
+		a.addEventsMessage(conversationClippedEvent{})
+		a.logger.Info("truncated conversation")
+	}
+}
+
 const doneToolName = "end_iteration"
 
 func (a *Agent) processUntilDone() error {
 	a.logger.Info("processing events")
 	for {
-		toolDefs := make([]ToolDef, 0)
-		for _, tool := range a.tools {
-			toolDefs = append(toolDefs, tool.Def())
-		}
-		workingMem, err := a.workingMemory()
-		if err != nil {
-			workingMem = fmt.Sprintf("There was an error loading your working memory: %s", workingMem)
-		}
-		inputData := EncoderInput{
-			a.history,
-			toolDefs,
-			time.Now(),
-			workingMem,
-		}
-		result, _, err := a.pipeline.Call(context.Background(), inputData)
+		result, _, err := a.pipeline.Call(context.Background(), a.history)
 		if err != nil {
 			a.logger.Error("failed to process events", "err", err)
 			return err
@@ -116,7 +115,7 @@ func (a *Agent) processUntilDone() error {
 
 		if len(result.ToolCalls) == 0 {
 			a.logger.Info("agent called no tools so we need to remind it this is not how it stops processing")
-			a.addHistory(NeedToExplicitlyStopMessage())
+			a.addHistory(needToEndMessage{})
 			continue
 		}
 		if len(result.ToolCalls) == 1 && result.ToolCalls[0].ToolName == doneToolName {
@@ -162,44 +161,21 @@ func (a *Agent) processUntilDone() error {
 			responses = append(responses, out)
 		}
 
-		a.history = append(a.history, toolResponseMessage{responses})
+		a.history = append(a.history, toolResponseMessage{
+			Responses: responses,
+		})
 	}
-}
-
-func (a *Agent) workingMemory() (string, error) {
-	f, err := os.Open(a.memoryFile)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	bs, err := io.ReadAll(f)
-	if err != nil {
-		return "", err
-	}
-	return string(bs), nil
 }
 
 func (a *Agent) addEventsMessage(events ...Event) {
-	a.addHistory(EventsMessage(events...))
+	a.addHistory(eventsMessage{events})
 	eventNames := make([]string, len(events))
 	for i, e := range events {
-		eventNames[i] = e.Kind()
+		eventNames[i] = string(e.EventKind())
 	}
 	a.logger.Info("events occured", "n", len(events), "names", strings.Join(eventNames, ";"))
 }
 
-func (a *Agent) addHistory(messages ...Message) {
+func (a *Agent) addHistory(messages ...message) {
 	a.history = append(a.history, messages...)
-}
-
-//go:embed system.json
-var defaultPrompt []byte
-
-func getDefaultPrompt() JsonObject {
-	var res JsonObject
-	err := json.NewDecoder(bytes.NewReader(defaultPrompt)).Decode(&res)
-	if err != nil {
-		panic(err)
-	}
-	return res
 }
