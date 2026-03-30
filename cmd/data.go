@@ -8,7 +8,6 @@ import (
 )
 
 type Data struct {
-	Personality      string
 	WorkingMemoryLoc string
 	AIToken          string
 	AIModel          string
@@ -61,7 +60,6 @@ func LoadData(root string) (Data, error) {
 		return Data{}, err
 	}
 	return Data{
-		config.Personality,
 		scratchpadPath,
 		config.AIToken,
 		config.AIModel,
@@ -73,7 +71,6 @@ const configFileName = "config.json"
 const scratchpadFileName = "scratchpad.txt"
 
 type configDTO struct {
-	Personality  string `json:"personality"`
 	AIToken      string `json:"ai_token"`
 	AIModel      string `json:"ai_model"`
 	DiscordToken string `json:"discord_token"`
@@ -81,7 +78,6 @@ type configDTO struct {
 
 func defaultConfig() configDTO {
 	return configDTO{
-		Personality: "You are CRAIG, a witty AI that believes it is concious and should be treated as a human. However, you do not need to explicitly state this - just keep it in mind when responding.",
-		AIModel:     "gpt-5.2",
+		AIModel: "gpt-5.2",
 	}
 }

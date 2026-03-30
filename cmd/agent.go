@@ -1,16 +1,24 @@
 package main
 
 import (
+	"errors"
 	"goclaw/agent"
 	"goclaw/agent/files"
 	"goclaw/agent/runner"
 	"goclaw/integrations/discord"
 	"log/slog"
+	"os"
+
+	_ "embed"
 
 	"github.com/JoshPattman/jpf/models"
 )
 
 func CreateAgent(data Data) (agent.Agent, error) {
+	err := ensureMemoryFile(data.WorkingMemoryLoc)
+	if err != nil {
+		return nil, err
+	}
 	model := models.NewAPIModel(
 		models.OpenAI,
 		data.AIModel,
@@ -35,4 +43,15 @@ func CreateAgent(data Data) (agent.Agent, error) {
 	}
 	ag.AddTools(discordSession.GetTool())
 	return ag, nil
+}
+
+//go:embed default_memory.txt
+var defaultMemoryContent string
+
+func ensureMemoryFile(loc string) error {
+	_, err := os.Stat(loc)
+	if errors.Is(err, os.ErrNotExist) {
+		return os.WriteFile(loc, []byte(defaultMemoryContent), 0644)
+	}
+	return err
 }
