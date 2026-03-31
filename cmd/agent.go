@@ -6,6 +6,7 @@ import (
 	"goclaw/agent/files"
 	"goclaw/agent/runner"
 	"goclaw/integrations/discord"
+	"goclaw/integrations/mcptool"
 	"log/slog"
 	"os"
 
@@ -42,6 +43,11 @@ func CreateAgent(data Data) (agent.Agent, error) {
 		return nil, err
 	}
 	ag.AddTools(discordSession.GetTool())
+	mcpTools, err := createMCPs(data.HTTPMCPs, data.LocalMCPs)
+	if err != nil {
+		return nil, err
+	}
+	ag.AddTools(mcpTools...)
 	return ag, nil
 }
 
@@ -54,4 +60,31 @@ func ensureMemoryFile(loc string) error {
 		return os.WriteFile(loc, []byte(defaultMemoryContent), 0644)
 	}
 	return err
+}
+
+func createMCPs(httpMCPDatas []HTTPMCPData, localMCPDatas []LocalMCPData) ([]agent.Tool, error) {
+	tools := make([]agent.Tool, 0)
+	for _, mcpData := range httpMCPDatas {
+		client, err := mcptool.CreateClient(mcpData.Address, mcpData.Headers)
+		if err != nil {
+			return nil, err
+		}
+		clientTools, err := mcptool.CreateToolsFromMCP(client)
+		if err != nil {
+			return nil, err
+		}
+		tools = append(tools, clientTools...)
+	}
+	for _, mcpData := range localMCPDatas {
+		client, err := mcptool.CreateCommand(mcpData.Command)
+		if err != nil {
+			return nil, err
+		}
+		clientTools, err := mcptool.CreateToolsFromMCP(client)
+		if err != nil {
+			return nil, err
+		}
+		tools = append(tools, clientTools...)
+	}
+	return tools, nil
 }

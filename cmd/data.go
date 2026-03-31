@@ -12,6 +12,17 @@ type Data struct {
 	AIToken          string
 	AIModel          string
 	DiscordToken     string
+	HTTPMCPs         []HTTPMCPData
+	LocalMCPs        []LocalMCPData
+}
+
+type HTTPMCPData struct {
+	Address string
+	Headers map[string]string
+}
+
+type LocalMCPData struct {
+	Command []string
 }
 
 func UpdateConfig(root string) error {
@@ -59,11 +70,21 @@ func LoadData(root string) (Data, error) {
 	if err != nil {
 		return Data{}, err
 	}
+	httpMcpDatas := make([]HTTPMCPData, len(config.HTTPMCPDatas))
+	for i, m := range config.HTTPMCPDatas {
+		httpMcpDatas[i] = HTTPMCPData(m)
+	}
+	localMcpDatas := make([]LocalMCPData, len(config.LocalMCPDatas))
+	for i, m := range config.LocalMCPDatas {
+		localMcpDatas[i] = LocalMCPData(m)
+	}
 	return Data{
 		scratchpadPath,
 		config.AIToken,
 		config.AIModel,
 		config.DiscordToken,
+		httpMcpDatas,
+		localMcpDatas,
 	}, nil
 }
 
@@ -71,9 +92,20 @@ const configFileName = "config.json"
 const scratchpadFileName = "scratchpad.txt"
 
 type configDTO struct {
-	AIToken      string `json:"ai_token"`
-	AIModel      string `json:"ai_model"`
-	DiscordToken string `json:"discord_token"`
+	AIToken       string            `json:"ai_token"`
+	AIModel       string            `json:"ai_model"`
+	DiscordToken  string            `json:"discord_token"`
+	HTTPMCPDatas  []httpMcpDataDTO  `json:"http_mcp_servers"`
+	LocalMCPDatas []localMcpDataDTO `json:"local_mcp_servers"`
+}
+
+type httpMcpDataDTO struct {
+	Address string            `json:"address"`
+	Headers map[string]string `json:"headers"`
+}
+
+type localMcpDataDTO struct {
+	Command []string `json:"command"`
 }
 
 func defaultConfig() configDTO {
