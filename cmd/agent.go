@@ -16,6 +16,7 @@ import (
 )
 
 func CreateAgent(data Data) (agent.Agent, error) {
+	logger := slog.Default()
 	err := ensureMemoryFile(data.WorkingMemoryLoc)
 	if err != nil {
 		return nil, err
@@ -27,11 +28,15 @@ func CreateAgent(data Data) (agent.Agent, error) {
 		models.WithReasoningEffort(models.LowReasoning),
 		models.WithJSONSchema(runner.GetResponseSchema()),
 	)
+	fs := files.OSFileSystem()
+	fs = files.ListenToWrite(fs, data.WorkingMemoryLoc, func(b []byte) {
+		logger.Info("Memory file has been changed")
+	})
 	ag := runner.New(
 		model,
 		data.WorkingMemoryLoc,
-		files.OSFileSystem(),
-		runner.WithLogger(slog.Default()),
+		fs,
+		runner.WithLogger(logger),
 	)
 
 	discordSession, err := discord.NewDiscordSession(data.DiscordToken, ag.Events())
