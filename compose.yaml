@@ -11,3 +11,5 @@ services:
       - ${HOME}/goclaw-data:/goclaw-data
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"

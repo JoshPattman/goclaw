@@ -5,6 +5,7 @@ go 1.25.5
 require github.com/bwmarrin/discordgo v0.29.0
 
 require (
+	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/JoshPattman/jpf v0.10.0-beta.2
 	github.com/invopop/jsonschema v0.13.0
 	github.com/mark3labs/mcp-go v0.46.0
@@ -16,6 +17,8 @@ require (
 	cloud.google.com/go/auth v0.20.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	github.com/PuerkitoBio/goquery v1.9.2 // indirect
+	github.com/andybalholm/cascadia v1.3.2 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

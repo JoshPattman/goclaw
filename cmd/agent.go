@@ -6,6 +6,7 @@ import (
 	"goclaw/agent/files"
 	"goclaw/agent/runner"
 	"goclaw/integrations/discord"
+	"goclaw/integrations/gmailplugin"
 	"goclaw/integrations/mcptool"
 	"log/slog"
 	"os"
@@ -43,6 +44,9 @@ func CreateAgent(data Data) (agent.Agent, error) {
 	mcpPlugins := createMCPs(data.HTTPMCPs, data.LocalMCPs)
 	for _, p := range mcpPlugins {
 		ag.AddPlugin(p)
+	}
+	if data.Gmail {
+		ag.AddPlugin(gmailplugin.NewPlugin(data.GmailConfigPath, data.GmailTokenPath, 8080))
 	}
 	return ag, nil
 }

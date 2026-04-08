@@ -14,6 +14,9 @@ type Data struct {
 	DiscordToken     string
 	HTTPMCPs         []HTTPMCPData
 	LocalMCPs        []LocalMCPData
+	Gmail            bool
+	GmailConfigPath  string
+	GmailTokenPath   string
 }
 
 type HTTPMCPData struct {
@@ -78,6 +81,8 @@ func LoadData(root string) (Data, error) {
 	for i, m := range config.LocalMCPDatas {
 		localMcpDatas[i] = LocalMCPData(m)
 	}
+	gmailConfigPath := path.Join(root, "gmail_config.json")
+	gmailTokenPath := path.Join(root, "gmail_token.json")
 	return Data{
 		scratchpadPath,
 		config.AIToken,
@@ -85,6 +90,9 @@ func LoadData(root string) (Data, error) {
 		config.DiscordToken,
 		httpMcpDatas,
 		localMcpDatas,
+		config.Gmail,
+		gmailConfigPath,
+		gmailTokenPath,
 	}, nil
 }
 
@@ -97,6 +105,7 @@ type configDTO struct {
 	DiscordToken  string            `json:"discord_token"`
 	HTTPMCPDatas  []httpMcpDataDTO  `json:"http_mcp_servers"`
 	LocalMCPDatas []localMcpDataDTO `json:"local_mcp_servers"`
+	Gmail         bool              `json:"gmail"`
 }
 
 type httpMcpDataDTO struct {
