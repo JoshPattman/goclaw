@@ -35,6 +35,8 @@ type ToolDef struct {
 type Agent interface {
 	AddPlugin(Plugin)
 	RemovePlugin(string) bool
+	RemoveAllPlugins()
 	Events() chan<- Event
 	Run() error
+	CleanStop()
 }

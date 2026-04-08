@@ -28,6 +28,8 @@ type agentRunner struct {
 	pluginLock         *sync.Mutex
 	memoryLoc          string
 	fs                 files.FileSystem
+	running            *sync.Mutex
+	cleanStop          chan struct{}
 }
 
 type loadedPlugin struct {
@@ -39,10 +41,10 @@ type loadedPlugin struct {
 }
 
 func (a *agentRunner) AddPlugin(p agent.Plugin) {
-	a.RemovePlugin(p.Name())
-
 	a.pluginLock.Lock()
 	defer a.pluginLock.Unlock()
+
+	a.removePluginWithoutLock(p.Name())
 
 	tools, events, shutdown, err := p.Load()
 	if err != nil {
@@ -57,12 +59,18 @@ func (a *agentRunner) RemovePlugin(name string) bool {
 	a.pluginLock.Lock()
 	defer a.pluginLock.Unlock()
 
+	return a.removePluginWithoutLock(name)
+}
+func (a *agentRunner) removePluginWithoutLock(name string) bool {
 	deleted := false
 	a.plugins = slices.DeleteFunc(a.plugins, func(p loadedPlugin) bool {
 		del := p.name == name
 		if del {
 			deleted = true
-			p.shutdown()
+			if p.shutdown != nil {
+				p.shutdown()
+				a.logger.Info("shutdown plugin", "plugin", name)
+			}
 		}
 		return del
 	})
@@ -72,9 +80,27 @@ func (a *agentRunner) RemovePlugin(name string) bool {
 	return deleted
 }
 
+func (a *agentRunner) RemoveAllPlugins() {
+	a.pluginLock.Lock()
+	defer a.pluginLock.Unlock()
+
+	names := make([]string, len(a.plugins))
+	for i, p := range a.plugins {
+		names[i] = p.name
+	}
+	for _, name := range names {
+		a.removePluginWithoutLock(name)
+	}
+}
+
 func (a *agentRunner) Events() chan<- agent.Event { return a.events }
 
 func (a *agentRunner) Run() error {
+	if !a.running.TryLock() {
+		return fmt.Errorf("agent is already running")
+	}
+	defer a.running.Unlock()
+
 	a.logger.Info("starting event forwarder")
 	done := make(chan struct{}, 1)
 	defer func() {
@@ -106,9 +132,19 @@ func (a *agentRunner) Run() error {
 			}
 			eventBuffer = nil
 			dispatch = nil
-
+		case <-a.cleanStop:
+			a.logger.Info("clean stop signal received, stopping event loop")
+			return nil
 		}
 	}
+}
+
+func (a *agentRunner) CleanStop() {
+	a.logger.Info("clean stop initiated, stopping event forwarder and waiting for current processing to finish")
+	a.cleanStop <- struct{}{}
+	a.running.Lock()
+	a.logger.Info("clean stop complete, agent has stopped")
+	a.running.Unlock()
 }
 
 func (a *agentRunner) eventForwarder(stop <-chan struct{}) {

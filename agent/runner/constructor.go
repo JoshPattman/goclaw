@@ -44,6 +44,8 @@ func New(model jpf.Model, memoryLoc string, fs files.FileSystem, opts ...runnerO
 		&sync.Mutex{},
 		memoryLoc,
 		fs,
+		&sync.Mutex{},
+		make(chan struct{}),
 	}
 	runner.AddPlugin(runnertools.Plugin(events, fs))
 	return runner
