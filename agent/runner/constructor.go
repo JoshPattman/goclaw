@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/JoshPattman/jpf"
@@ -33,16 +34,19 @@ func New(model jpf.Model, memoryLoc string, fs files.FileSystem, opts ...runnerO
 
 	events := make(chan agent.Event)
 
-	return &agentRunner{
+	runner := &agentRunner{
 		setup.logger,
 		events,
 		make([]messages.Message, 0),
 		pipe,
 		setup.collectionDuration,
-		runnertools.Tools(events, fs),
+		nil,
+		&sync.Mutex{},
 		memoryLoc,
 		fs,
 	}
+	runner.AddPlugin(runnertools.Plugin(events, fs))
+	return runner
 }
 
 type runnerOpt func(*agentRunnerSetup)

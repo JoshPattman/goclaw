@@ -5,55 +5,50 @@ import (
 	"errors"
 	"fmt"
 	"goclaw/agent"
-	"os/exec"
 	"slices"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func CreateCommand(command []string) (*client.Client, error) {
-	cmd := exec.Command(command[0], command[1:]...)
-	err := cmd.Start()
-	if err != nil {
-		return nil, err
-	}
-	in, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-	out, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	commandTransport := transport.NewIO(out, in, nil)
-
-	c := client.NewClient(commandTransport)
-
-	err = initClient(c)
-	if err != nil {
-		return nil, err
-	}
-	return c, nil
+func New(name string, factory ClientFactory) agent.Plugin {
+	return &plugin{name, factory}
 }
 
-func CreateClient(addr string, customHeaders map[string]string) (*client.Client, error) {
-	httpTransport, err := transport.NewStreamableHTTP(
-		addr,
-		transport.WithHTTPHeaders(customHeaders),
-	)
-	if err != nil {
-		return nil, err
-	}
-	c := client.NewClient(httpTransport)
+type plugin struct {
+	name    string
+	factory ClientFactory
+}
 
+func (p *plugin) Load() ([]agent.Tool, <-chan agent.Event, func(), error) {
+	c, err := p.factory.CreateClient()
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	err = initClient(c)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	return c, nil
+
+	ctx := context.Background()
+	result, err := c.ListTools(ctx, mcp.ListToolsRequest{})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	tools := make([]agent.Tool, len(result.Tools))
+	for i, mcpTool := range result.Tools {
+		agentTool, err := createTool(c, mcpTool)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		tools[i] = agentTool
+	}
+	return tools, nil, nil, nil
+}
+
+func (p *plugin) Name() string {
+	return "mcp@" + p.name
 }
 
 func initClient(c *client.Client) error {
@@ -70,23 +65,6 @@ func initClient(c *client.Client) error {
 		return err
 	}
 	return nil
-}
-
-func CreateToolsFromMCP(client *client.Client) ([]agent.Tool, error) {
-	ctx := context.Background()
-	result, err := client.ListTools(ctx, mcp.ListToolsRequest{})
-	if err != nil {
-		return nil, err
-	}
-	tools := make([]agent.Tool, len(result.Tools))
-	for i, mcpTool := range result.Tools {
-		agentTool, err := createTool(client, mcpTool)
-		if err != nil {
-			return nil, err
-		}
-		tools[i] = agentTool
-	}
-	return tools, nil
 }
 
 func createTool(client *client.Client, tool mcp.Tool) (agent.Tool, error) {

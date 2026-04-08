@@ -8,7 +8,9 @@ import (
 	"goclaw/agent/runner/messages"
 	"goclaw/agent/runner/runnertools"
 	"log/slog"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/JoshPattman/jpf"
@@ -22,25 +24,66 @@ type agentRunner struct {
 	history            []messages.Message
 	pipeline           jpf.Pipeline[encoderInput, messages.ToolCallsMessage]
 	collectionDuration time.Duration
-	tools              []agent.Tool
+	plugins            []loadedPlugin
+	pluginLock         *sync.Mutex
 	memoryLoc          string
 	fs                 files.FileSystem
 }
 
-func (a *agentRunner) AddTools(tools ...agent.Tool) {
-	for _, t := range tools {
-		if a.toolExists(t.Def().Name) {
-			continue
-		}
-		a.tools = append(a.tools, t)
+type loadedPlugin struct {
+	name     string
+	tools    []agent.Tool
+	events   <-chan agent.Event
+	shutdown func()
+	err      error
+}
+
+func (a *agentRunner) AddPlugin(p agent.Plugin) {
+	a.RemovePlugin(p.Name())
+
+	a.pluginLock.Lock()
+	defer a.pluginLock.Unlock()
+
+	tools, events, shutdown, err := p.Load()
+	if err != nil {
+		a.logger.Error("failed to load plugin", "plugin", p.Name(), "err", err)
+	} else {
+		a.logger.Info("loaded plugin", "plugin", p.Name(), "num_tools", len(tools))
 	}
-	a.logger.Info("changed tools", "active_tools", a.toolNames())
+	a.plugins = append(a.plugins, loadedPlugin{p.Name(), tools, events, shutdown, err})
+}
+
+func (a *agentRunner) RemovePlugin(name string) bool {
+	a.pluginLock.Lock()
+	defer a.pluginLock.Unlock()
+
+	deleted := false
+	a.plugins = slices.DeleteFunc(a.plugins, func(p loadedPlugin) bool {
+		del := p.name == name
+		if del {
+			deleted = true
+			p.shutdown()
+		}
+		return del
+	})
+	if deleted {
+		a.logger.Info("removed plugin", "plugin", name)
+	}
+	return deleted
 }
 
 func (a *agentRunner) Events() chan<- agent.Event { return a.events }
 
 func (a *agentRunner) Run() error {
+	a.logger.Info("starting event forwarder")
+	done := make(chan struct{}, 1)
+	defer func() {
+		done <- struct{}{}
+	}()
+	go a.eventForwarder(done)
+
 	a.logger.Info("running event loop")
+
 	var eventBuffer []agent.Event
 	var dispatch <-chan time.Time
 
@@ -68,12 +111,57 @@ func (a *agentRunner) Run() error {
 	}
 }
 
+func (a *agentRunner) eventForwarder(stop <-chan struct{}) {
+	for {
+		a.pluginLock.Lock()
+		for _, p := range a.plugins {
+			if p.events == nil {
+				continue
+			}
+			finishedPluginEvents := false
+			for !finishedPluginEvents {
+				// If stop is used, immediately stop without processing further events.
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				// Recv an event.
+				select {
+				case event, ok := <-p.events:
+					// Try to send but if stop is used, stop immediately (before blocking on events chan).
+					if !ok {
+						continue
+					}
+					select {
+					case <-stop:
+						return
+					case a.events <- event:
+					}
+				// If no events, continue
+				default:
+					finishedPluginEvents = true
+				}
+			}
+		}
+		a.pluginLock.Unlock()
+		// If stop after we are done with events, stop now.
+		select {
+		case <-stop:
+			return
+		default:
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func (a *agentRunner) processUntilDone() error {
 	a.logger.Info("processing events")
 	for {
 		inputData := encoderInput{
 			a.history,
 			a.toolDefs(),
+			a.failedPlugins(),
 			time.Now(),
 			a.memoryLoc,
 			a.workingMemory(),
@@ -158,9 +246,11 @@ func (a *agentRunner) addHistory(messages ...messages.Message) {
 }
 
 func (a *agentRunner) lookupTool(name string) agent.Tool {
-	for _, t := range a.tools {
-		if t.Def().Name == name {
-			return t
+	for _, p := range a.plugins {
+		for _, t := range p.tools {
+			if t.Def().Name == name {
+				return t
+			}
 		}
 	}
 	return nil
@@ -171,17 +261,31 @@ func (a *agentRunner) toolExists(name string) bool {
 }
 
 func (a *agentRunner) toolNames() []string {
-	names := make([]string, len(a.tools))
-	for i, t := range a.tools {
-		names[i] = t.Def().Name
+	names := make([]string, 0)
+	for _, p := range a.plugins {
+		for _, t := range p.tools {
+			names = append(names, t.Def().Name)
+		}
 	}
 	return names
 }
 
 func (a *agentRunner) toolDefs() []agent.ToolDef {
-	defs := make([]agent.ToolDef, len(a.tools))
-	for i, t := range a.tools {
-		defs[i] = t.Def()
+	defs := make([]agent.ToolDef, 0)
+	for _, p := range a.plugins {
+		for _, t := range p.tools {
+			defs = append(defs, t.Def())
+		}
 	}
 	return defs
+}
+
+func (a *agentRunner) failedPlugins() []failedPlugin {
+	failed := make([]failedPlugin, 0)
+	for _, p := range a.plugins {
+		if p.err != nil {
+			failed = append(failed, failedPlugin{p.name, p.err})
+		}
+	}
+	return failed
 }
