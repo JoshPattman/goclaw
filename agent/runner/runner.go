@@ -250,6 +250,7 @@ func (a *agentRunner) processUntilDone() error {
 			}
 
 			responses = append(responses, out)
+			a.logger.Info("Tool added tokens to context", "tool", call.ToolName, "tokens", countApproxTokens(out))
 		}
 		a.addHistory(messages.ToolResponseMessage(responses))
 	}
