@@ -69,9 +69,7 @@ func LoadData(root string) (Data, error) {
 		return Data{}, err
 	}
 	defer f.Close()
-	config := configDTO{
-		MaxTokens: 16000,
-	}
+	config := configDTO{}
 	err = json.NewDecoder(f).Decode(&config)
 	if err != nil {
 		return Data{}, err
@@ -124,6 +122,7 @@ type localMcpDataDTO struct {
 
 func defaultConfig() configDTO {
 	return configDTO{
-		AIModel: "gpt-5.2",
+		AIModel:   "gpt-5.2",
+		MaxTokens: 16000,
 	}
 }
