@@ -17,6 +17,7 @@ type Data struct {
 	Gmail            bool
 	GmailConfigPath  string
 	GmailTokenPath   string
+	MaxTokens        int
 }
 
 type HTTPMCPData struct {
@@ -68,7 +69,9 @@ func LoadData(root string) (Data, error) {
 		return Data{}, err
 	}
 	defer f.Close()
-	config := configDTO{}
+	config := configDTO{
+		MaxTokens: 16000,
+	}
 	err = json.NewDecoder(f).Decode(&config)
 	if err != nil {
 		return Data{}, err
@@ -93,6 +96,7 @@ func LoadData(root string) (Data, error) {
 		config.Gmail,
 		gmailConfigPath,
 		gmailTokenPath,
+		config.MaxTokens,
 	}, nil
 }
 
@@ -106,6 +110,7 @@ type configDTO struct {
 	HTTPMCPDatas  []httpMcpDataDTO  `json:"http_mcp_servers"`
 	LocalMCPDatas []localMcpDataDTO `json:"local_mcp_servers"`
 	Gmail         bool              `json:"gmail"`
+	MaxTokens     int               `json:"max_tokens"`
 }
 
 type httpMcpDataDTO struct {

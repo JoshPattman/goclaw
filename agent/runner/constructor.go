@@ -23,6 +23,7 @@ func New(model jpf.Model, memoryLoc string, fs files.FileSystem, opts ...runnerO
 		logger:             slog.New(nothingLoggHandler),
 		prompt:             getDefaultPrompt(),
 		collectionDuration: time.Second,
+		maxTokens:          16000,
 	}
 	for _, o := range opts {
 		o(&setup)
@@ -49,7 +50,7 @@ func New(model jpf.Model, memoryLoc string, fs files.FileSystem, opts ...runnerO
 		make(chan struct{}),
 		5,
 		5,
-		16000,
+		setup.maxTokens,
 	}
 	runner.AddPlugin(runnertools.Plugin(events, fs))
 	return runner
@@ -61,6 +62,7 @@ type agentRunnerSetup struct {
 	logger             *slog.Logger
 	collectionDuration time.Duration
 	prompt             agent.JsonObject
+	maxTokens          int
 }
 
 func WithLogger(logger *slog.Logger) runnerOpt {
@@ -78,5 +80,11 @@ func WithCollectDuration(dur time.Duration) runnerOpt {
 func WithPrompt(prompt agent.JsonObject) runnerOpt {
 	return func(ar *agentRunnerSetup) {
 		ar.prompt = prompt
+	}
+}
+
+func WithMaxTokens(maxTokens int) runnerOpt {
+	return func(ars *agentRunnerSetup) {
+		ars.maxTokens = maxTokens
 	}
 }

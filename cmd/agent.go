@@ -39,6 +39,7 @@ func CreateAgent(data Data) (agent.Agent, error) {
 		data.WorkingMemoryLoc,
 		fs,
 		runner.WithLogger(logger),
+		runner.WithMaxTokens(data.MaxTokens),
 	)
 	ag.AddPlugin(discord.New(data.DiscordToken))
 	mcpPlugins := createMCPs(data.HTTPMCPs, data.LocalMCPs)
