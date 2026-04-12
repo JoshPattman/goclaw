@@ -22,6 +22,7 @@ type agentRunner struct {
 	logger             *slog.Logger
 	events             chan agent.Event
 	history            []messages.Message
+	encoder            jpf.Encoder[encoderInput]
 	pipeline           jpf.Pipeline[encoderInput, messages.ToolCallsMessage]
 	collectionDuration time.Duration
 	plugins            []loadedPlugin
@@ -30,6 +31,9 @@ type agentRunner struct {
 	fs                 files.FileSystem
 	running            *sync.Mutex
 	cleanStop          chan struct{}
+	shrinkBoundary     int
+	truncateBoundary   int
+	tokenLimit         int
 }
 
 type loadedPlugin struct {
@@ -194,14 +198,8 @@ func (a *agentRunner) eventForwarder(stop <-chan struct{}) {
 func (a *agentRunner) processUntilDone() error {
 	a.logger.Info("processing events")
 	for {
-		inputData := encoderInput{
-			a.history,
-			a.toolDefs(),
-			a.failedPlugins(),
-			time.Now(),
-			a.memoryLoc,
-			a.workingMemory(),
-		}
+		a.ensureNotTooManyTokens()
+		inputData := a.encoderInput()
 		result, _, err := a.pipeline.Call(context.Background(), inputData)
 		if err != nil {
 			a.logger.Error("failed to process events", "err", err)
@@ -215,7 +213,12 @@ func (a *agentRunner) processUntilDone() error {
 			continue
 		}
 		if len(result.ToolCalls) == 1 && result.ToolCalls[0].ToolName == runnertools.DoneToolName() {
-			a.logger.Info("agent called end iteration tool so we can stop")
+			approxTokens, err := a.countApproxTokens()
+			if err != nil {
+				a.logger.Error("failed to count tokens", "err", err)
+				approxTokens = -1
+			}
+			a.logger.Info("agent called end iteration tool so we can stop", "conversation_tokens_approx", approxTokens)
 			return nil
 		}
 		a.logToolCalls(result.ToolCalls)
@@ -249,6 +252,82 @@ func (a *agentRunner) processUntilDone() error {
 			responses = append(responses, out)
 		}
 		a.addHistory(messages.ToolResponseMessage(responses))
+	}
+}
+
+func (a *agentRunner) ensureNotTooManyTokens() {
+	for {
+		tokens, err := a.countApproxTokens()
+		if err != nil {
+			a.logger.Error("failed to count tokens", "err", err)
+			return
+		}
+		if tokens <= a.tokenLimit {
+			return
+		}
+		couldShrink := a.shrinkAMessage()
+		if couldShrink {
+			continue
+		}
+		couldRemove := a.removeAMessage()
+		if couldRemove {
+			continue
+		}
+		a.logger.Warn("too many tokens and cannot shrink or remove any more messages", "token_count_approx", tokens)
+		return
+	}
+}
+
+func (a *agentRunner) removeAMessage() bool {
+	if len(a.history) <= a.truncateBoundary {
+		return false
+	}
+	a.logger.Info("removing a message to reduce token count", "message_type", fmt.Sprintf("%T", a.history[0]))
+	a.history = a.history[1:]
+	return true
+}
+
+func (a *agentRunner) shrinkAMessage() bool {
+	for i, msg := range a.history {
+		if len(a.history)-i <= a.shrinkBoundary {
+			break
+		}
+		shrinkable, ok := msg.(messages.ShrinkableMessage)
+		if !ok {
+			continue
+
+		}
+		if shrinkable.IsShrunk() {
+			continue
+		}
+		a.logger.Info("shrinking a message to reduce token count", "index", i, "message_type", fmt.Sprintf("%T", msg))
+		a.history[i] = shrinkable.Shrunk()
+		return true
+	}
+	return false
+}
+
+func (a *agentRunner) countApproxTokens() (int, error) {
+	messages, err := a.encoder.BuildInputMessages(a.encoderInput())
+	if err != nil {
+		return 0, err
+	}
+	totalTokens := 0
+	for _, msg := range messages {
+		totalTokens += 10 // roughly for stuff like role etc
+		totalTokens += countApproxTokens(msg.Content)
+	}
+	return totalTokens, nil
+}
+
+func (a *agentRunner) encoderInput() encoderInput {
+	return encoderInput{
+		a.history,
+		a.toolDefs(),
+		a.failedPlugins(),
+		time.Now(),
+		a.memoryLoc,
+		a.workingMemory(),
 	}
 }
 

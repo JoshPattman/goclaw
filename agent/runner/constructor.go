@@ -38,6 +38,7 @@ func New(model jpf.Model, memoryLoc string, fs files.FileSystem, opts ...runnerO
 		setup.logger,
 		events,
 		make([]messages.Message, 0),
+		enc,
 		pipe,
 		setup.collectionDuration,
 		nil,
@@ -46,6 +47,9 @@ func New(model jpf.Model, memoryLoc string, fs files.FileSystem, opts ...runnerO
 		fs,
 		&sync.Mutex{},
 		make(chan struct{}),
+		5,
+		5,
+		16000,
 	}
 	runner.AddPlugin(runnertools.Plugin(events, fs))
 	return runner

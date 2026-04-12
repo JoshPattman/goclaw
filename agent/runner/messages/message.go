@@ -10,3 +10,9 @@ type Message interface {
 	Role() jpf.Role
 	Content() agent.JsonObject
 }
+
+type ShrinkableMessage interface {
+	Message
+	Shrunk() Message
+	IsShrunk() bool
+}
