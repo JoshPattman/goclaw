@@ -51,6 +51,7 @@ func (p *plugin) Load() ([]cg.Tool, <-chan cg.Event, func(), error) {
 func (p *plugin) Name() string {
 	return "mcp@" + p.name
 }
+func (p *plugin) Internal() bool { return false }
 
 func initClient(c *client.Client) error {
 	initRequest := mcp.InitializeRequest{}

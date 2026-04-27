@@ -48,6 +48,8 @@ func (p *gmailPlugin) Name() string {
 	return p.name
 }
 
+func (p *gmailPlugin) Internal() bool { return false }
+
 type emailSaver interface {
 	InsertEmail(e email.Email) (string, error)
 }

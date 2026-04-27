@@ -22,6 +22,8 @@ func (p *discordPlugin) Name() string {
 	return "discord"
 }
 
+func (p *discordPlugin) Internal() bool { return false }
+
 func (p *discordPlugin) Load() ([]cg.Tool, <-chan cg.Event, func(), error) {
 	sess, err := discordgo.New("Bot " + p.token)
 	if err != nil {

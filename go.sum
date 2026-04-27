@@ -6,8 +6,8 @@ cloud.google.com/go/compute/metadata v0.9.0 h1:pDUj4QMoPejqq20dK0Pg2N4yG9zIkYGdB
 cloud.google.com/go/compute/metadata v0.9.0/go.mod h1:E0bWwX5wTnLPedCKqk3pJmVgCBSM6qQI1yTBdEb3C10=
 github.com/JohannesKaufmann/html-to-markdown v1.6.0 h1:04VXMiE50YYfCfLboJCLcgqF5x+rHJnb1ssNmqpLH/k=
 github.com/JohannesKaufmann/html-to-markdown v1.6.0/go.mod h1:NUI78lGg/a7vpEJTz/0uOcYMaibytE4BUOQS8k78yPQ=
-github.com/JoshPattman/cg v0.0.1 h1:40ga8662c6ImIfwO2Li74H+o2jL2cnKLZIwp5NIhQhg=
-github.com/JoshPattman/cg v0.0.1/go.mod h1:XJ60nMwDpA6wX8dyn+UQaa2VfhpFQEn56qtTpwrB7mU=
+github.com/JoshPattman/cg v0.0.2 h1:GI9heGWcWMelqTxzN9HT19CnQBJ0UQtkGlIhY0uXR8s=
+github.com/JoshPattman/cg v0.0.2/go.mod h1:XJ60nMwDpA6wX8dyn+UQaa2VfhpFQEn56qtTpwrB7mU=
 github.com/JoshPattman/jpf v0.10.0-beta.2 h1:gKObVE6YukXZsvQ+ZjjpXtYgheF55DXcSjnzcus8aaQ=
 github.com/JoshPattman/jpf v0.10.0-beta.2/go.mod h1:42+6HMXmZ7FnWERMUZKV4M1lcTmYPuizxI0D+eR8F7I=
 github.com/PuerkitoBio/goquery v1.9.2 h1:4/wZksC3KgkQw7SQgkKotmKljk0M6V8TUvA8Wb4yPeE=

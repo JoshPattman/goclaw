@@ -6,7 +6,7 @@ require github.com/bwmarrin/discordgo v0.29.0
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
-	github.com/JoshPattman/cg v0.0.1
+	github.com/JoshPattman/cg v0.0.2
 	github.com/JoshPattman/jpf v0.10.0-beta.2
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.46.0
