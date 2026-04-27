@@ -17,6 +17,10 @@ type Data struct {
 	Gmail            bool
 	GmailConfigPath  string
 	GmailTokenPath   string
+	EMLEmail         bool
+	EMLEmailPath     string
+	EMLEmailUsername string
+	EMLEmailAddress  string
 	MaxTokens        int
 }
 
@@ -84,6 +88,10 @@ func LoadData(root string) (Data, error) {
 	}
 	gmailConfigPath := path.Join(root, "gmail_config.json")
 	gmailTokenPath := path.Join(root, "gmail_token.json")
+	emlIntakeDir := path.Join(root, "eml_intake")
+	if config.EMLEmail {
+		os.MkdirAll(emlIntakeDir, os.ModePerm)
+	}
 	return Data{
 		scratchpadPath,
 		config.AIToken,
@@ -94,6 +102,10 @@ func LoadData(root string) (Data, error) {
 		config.Gmail,
 		gmailConfigPath,
 		gmailTokenPath,
+		config.EMLEmail,
+		emlIntakeDir,
+		config.EMLEmailUsername,
+		config.EMLEmailAddress,
 		config.MaxTokens,
 	}, nil
 }
@@ -102,13 +114,16 @@ const configFileName = "config.json"
 const scratchpadFileName = "scratchpad.txt"
 
 type configDTO struct {
-	AIToken       string            `json:"ai_token"`
-	AIModel       string            `json:"ai_model"`
-	DiscordToken  string            `json:"discord_token"`
-	HTTPMCPDatas  []httpMcpDataDTO  `json:"http_mcp_servers"`
-	LocalMCPDatas []localMcpDataDTO `json:"local_mcp_servers"`
-	Gmail         bool              `json:"gmail"`
-	MaxTokens     int               `json:"max_tokens"`
+	AIToken          string            `json:"ai_token"`
+	AIModel          string            `json:"ai_model"`
+	DiscordToken     string            `json:"discord_token"`
+	HTTPMCPDatas     []httpMcpDataDTO  `json:"http_mcp_servers"`
+	LocalMCPDatas    []localMcpDataDTO `json:"local_mcp_servers"`
+	Gmail            bool              `json:"gmail"`
+	EMLEmail         bool              `json:"eml_email"`
+	EMLEmailUsername string            `json:"eml_email_username"`
+	EMLEmailAddress  string            `json:"eml_email_address"`
+	MaxTokens        int               `json:"max_tokens"`
 }
 
 type httpMcpDataDTO struct {

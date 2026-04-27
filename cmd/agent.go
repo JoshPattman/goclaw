@@ -2,22 +2,28 @@ package main
 
 import (
 	"errors"
-	"goclaw/agent"
-	"goclaw/agent/files"
-	"goclaw/agent/runner"
+	"fmt"
 	"goclaw/integrations/discord"
-	"goclaw/integrations/gmailplugin"
+	"goclaw/integrations/mail"
 	"goclaw/integrations/mcptool"
+	"goclaw/services/email"
+	"goclaw/services/filemail"
+	"goclaw/services/googlemail"
 	"log/slog"
 	"os"
 	"strings"
+
+	"github.com/JoshPattman/cg"
+	"github.com/JoshPattman/cg/runner"
+
+	"github.com/JoshPattman/cg/files"
 
 	_ "embed"
 
 	"github.com/JoshPattman/jpf/models"
 )
 
-func CreateAgent(data Data) (agent.Agent, error) {
+func CreateAgent(data Data) (cg.Agent, error) {
 	logger := slog.Default()
 	err := ensureMemoryFile(data.WorkingMemoryLoc)
 	if err != nil {
@@ -47,7 +53,23 @@ func CreateAgent(data Data) (agent.Agent, error) {
 		ag.AddPlugin(p)
 	}
 	if data.Gmail {
-		ag.AddPlugin(gmailplugin.NewPlugin(data.GmailConfigPath, data.GmailTokenPath, 8080))
+		ag.AddPlugin(mail.NewPlugin(
+			"gmail",
+			func() (email.Client, error) {
+				return googlemail.BuildClient(data.GmailConfigPath, data.GmailTokenPath, 8080, func(token string) {
+					fmt.Printf("To login to the gmail API, follow this link: %s\n", token)
+				})
+			},
+		))
+	}
+	if data.EMLEmail {
+		ag.AddPlugin(mail.NewPlugin(
+			"eml_email",
+			func() (email.Client, error) {
+				return filemail.NewClient(email.Person{Name: data.EMLEmailUsername, Email: data.EMLEmailAddress}, data.EMLEmailPath)
+			},
+			mail.WithIngestionFromFolder(data.EMLEmailPath),
+		))
 	}
 	return ag, nil
 }
@@ -63,8 +85,8 @@ func ensureMemoryFile(loc string) error {
 	return err
 }
 
-func createMCPs(httpMCPDatas []HTTPMCPData, localMCPDatas []LocalMCPData) []agent.Plugin {
-	plugins := make([]agent.Plugin, 0)
+func createMCPs(httpMCPDatas []HTTPMCPData, localMCPDatas []LocalMCPData) []cg.Plugin {
+	plugins := make([]cg.Plugin, 0)
 	for _, mcpData := range httpMCPDatas {
 		plugins = append(plugins, mcptool.New(mcpData.Address, mcptool.ClientFromHTTP(mcpData.Address, mcpData.Headers)))
 	}

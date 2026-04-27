@@ -6,9 +6,11 @@ require github.com/bwmarrin/discordgo v0.29.0
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
+	github.com/JoshPattman/cg v0.0.1
 	github.com/JoshPattman/jpf v0.10.0-beta.2
-	github.com/invopop/jsonschema v0.13.0
+	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.46.0
+	github.com/nelsonken/emlparser-go v0.0.0-20200422124531-17288a505d31
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/api v0.275.0
 )
@@ -27,10 +29,10 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.14 // indirect
 	github.com/googleapis/gax-go/v2 v2.21.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect

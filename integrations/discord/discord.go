@@ -2,12 +2,13 @@ package discord
 
 import (
 	"fmt"
-	"goclaw/agent"
+
+	"github.com/JoshPattman/cg"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-func New(token string) agent.Plugin {
+func New(token string) cg.Plugin {
 	return &discordPlugin{
 		token: token,
 	}
@@ -21,7 +22,7 @@ func (p *discordPlugin) Name() string {
 	return "discord"
 }
 
-func (p *discordPlugin) Load() ([]agent.Tool, <-chan agent.Event, func(), error) {
+func (p *discordPlugin) Load() ([]cg.Tool, <-chan cg.Event, func(), error) {
 	sess, err := discordgo.New("Bot " + p.token)
 	if err != nil {
 		return nil, nil, nil, err
@@ -30,19 +31,19 @@ func (p *discordPlugin) Load() ([]agent.Tool, <-chan agent.Event, func(), error)
 		discordgo.IntentsGuilds |
 			discordgo.IntentsGuildMessages |
 			discordgo.IntentsMessageContent
-	eventsOut := make(chan agent.Event)
+	eventsOut := make(chan cg.Event)
 	sess.AddHandler(makeMessageCreateHandler(eventsOut))
 	err = sess.Open()
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	tools := []agent.Tool{
+	tools := []cg.Tool{
 		&sendMessageTool{sess},
 	}
 	return tools, eventsOut, func() { sess.Close() }, nil
 }
 
-func makeMessageCreateHandler(eventsOut chan<- agent.Event) func(s *discordgo.Session, m *discordgo.MessageCreate) {
+func makeMessageCreateHandler(eventsOut chan<- cg.Event) func(s *discordgo.Session, m *discordgo.MessageCreate) {
 	return func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if m.Author.ID == s.State.User.ID {
 			return
@@ -82,8 +83,8 @@ type sendMessageTool struct {
 	sess *discordgo.Session
 }
 
-func (t *sendMessageTool) Def() agent.ToolDef {
-	return agent.ToolDef{
+func (t *sendMessageTool) Def() cg.ToolDef {
+	return cg.ToolDef{
 		Name: "discord_send_message",
 		Desc: "Send a message to a Discord channel. Args: channel_id (string), content (string)",
 	}
@@ -131,7 +132,7 @@ func (e discordMessageEvent) Kind() string {
 	return "discord_message_recv"
 }
 
-func (e discordMessageEvent) Content() agent.JsonObject {
+func (e discordMessageEvent) Content() cg.JsonObject {
 	return map[string]any{
 		"your_user_name":           e.YourUserName,
 		"channel_id":               e.ChannelID,

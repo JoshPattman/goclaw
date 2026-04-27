@@ -1,4 +1,4 @@
-package gmailplugin
+package googlemail
 
 import (
 	"context"

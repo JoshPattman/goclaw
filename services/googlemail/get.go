@@ -1,7 +1,8 @@
-package gmailplugin
+package googlemail
 
 import (
 	"encoding/base64"
+	"goclaw/services/email"
 	"strings"
 
 	"google.golang.org/api/gmail/v1"
@@ -38,57 +39,57 @@ func extractBody(p *gmail.MessagePart) string {
 	return ""
 }
 
-func (c *Client) GetEmail(id string) (Email, error) {
+func (c *Client) GetEmail(id string) (email.Email, error) {
 	msg, err := c.service.Users.Messages.Get("me", id).Do()
 	if err != nil {
-		return Email{}, err
+		return email.Email{}, err
 	}
 
-	labels := make([]Label, len(msg.LabelIds))
+	labels := make([]email.Label, len(msg.LabelIds))
 	for i, l := range msg.LabelIds {
-		labels[i] = Label(l)
+		labels[i] = email.Label(l)
 	}
 
-	email := Email{ID: id, Labels: labels}
+	em := email.Email{ID: id, Labels: labels}
 
 	for _, h := range msg.Payload.Headers {
 		switch h.Name {
 		case "Subject":
-			email.Subject = h.Value
+			em.Subject = h.Value
 		case "From":
 			person, err := parsePerson(h.Value)
 			if err != nil {
-				return Email{}, err
+				return email.Email{}, err
 			}
-			email.From = person
+			em.From = person
 		case "To":
 			for _, raw := range strings.Split(h.Value, ", ") {
 				person, err := parsePerson(raw)
 				if err != nil {
-					return Email{}, err
+					return email.Email{}, err
 				}
-				email.To = append(email.To, person)
+				em.To = append(em.To, person)
 			}
 		}
 	}
-	email.Content = extractBody(msg.Payload)
-	return email, nil
+	em.Content = extractBody(msg.Payload)
+	return em, nil
 }
 
-func parsePerson(raw string) (Person, error) {
+func parsePerson(raw string) (email.Person, error) {
 	parts := strings.SplitN(raw, "<", 2)
-	var name, email string
+	var name, em string
 	if len(parts) > 1 {
 		name = strings.TrimSpace(parts[0])
-		email = strings.Trim(parts[1], " \n\r\t>")
+		em = strings.Trim(parts[1], " \n\r\t>")
 	} else {
 		name = ""
-		email = strings.TrimSpace(parts[0])
+		em = strings.TrimSpace(parts[0])
 	}
 	if name == "" {
-		name = getNameFromEmail(email)
+		name = getNameFromEmail(em)
 	}
-	return Person{name, email}, nil
+	return email.Person{Name: name, Email: em}, nil
 }
 
 func getNameFromEmail(email string) string {

@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"goclaw/agent"
 	"slices"
 	"strings"
+
+	"github.com/JoshPattman/cg"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func New(name string, factory ClientFactory) agent.Plugin {
+func New(name string, factory ClientFactory) cg.Plugin {
 	return &plugin{name, factory}
 }
 
@@ -21,7 +22,7 @@ type plugin struct {
 	factory ClientFactory
 }
 
-func (p *plugin) Load() ([]agent.Tool, <-chan agent.Event, func(), error) {
+func (p *plugin) Load() ([]cg.Tool, <-chan cg.Event, func(), error) {
 	c, err := p.factory.CreateClient()
 	if err != nil {
 		return nil, nil, nil, err
@@ -36,7 +37,7 @@ func (p *plugin) Load() ([]agent.Tool, <-chan agent.Event, func(), error) {
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	tools := make([]agent.Tool, len(result.Tools))
+	tools := make([]cg.Tool, len(result.Tools))
 	for i, mcpTool := range result.Tools {
 		agentTool, err := createTool(c, mcpTool)
 		if err != nil {
@@ -67,7 +68,7 @@ func initClient(c *client.Client) error {
 	return nil
 }
 
-func createTool(client *client.Client, tool mcp.Tool) (agent.Tool, error) {
+func createTool(client *client.Client, tool mcp.Tool) (cg.Tool, error) {
 	return &mcpTool{client, tool}, nil
 }
 
@@ -98,7 +99,7 @@ func (m *mcpTool) Call(args map[string]any) (string, error) {
 	return strings.Join(contents, "\n\n\n"), nil
 }
 
-func (m *mcpTool) Def() agent.ToolDef {
+func (m *mcpTool) Def() cg.ToolDef {
 	desc := []string{m.tool.Description}
 	for pname, prop := range m.tool.InputSchema.Properties {
 		var required string
@@ -122,7 +123,7 @@ func (m *mcpTool) Def() agent.ToolDef {
 			fmt.Sprintf("Param%s `%s` (%s): %s", required, pname, propType, propDesc),
 		)
 	}
-	return agent.ToolDef{
+	return cg.ToolDef{
 		Name: m.tool.Name,
 		Desc: strings.Join(desc, "\n"),
 	}

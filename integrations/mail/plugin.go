@@ -1,50 +1,72 @@
-package gmailplugin
+package mail
 
 import (
 	"fmt"
-	"goclaw/agent"
+	"goclaw/services/email"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/JoshPattman/cg"
+
 	markdown "github.com/JohannesKaufmann/html-to-markdown"
 )
 
-func NewPlugin(credentialLocation string, tokenLocation string, listenPort int) *gmailPlugin {
+func NewPlugin(name string, buildClient func() (email.Client, error), opts ...pluginOpt) *gmailPlugin {
+	kwargs := pluginKwarg{}
+	for _, o := range opts {
+		o(&kwargs)
+	}
 	return &gmailPlugin{
-		credentialLocation: credentialLocation,
-		tokenLocation:      tokenLocation,
-		listenPort:         listenPort,
+		name,
+		buildClient,
+		kwargs.ingestionRoot,
+	}
+}
+
+type pluginKwarg struct {
+	ingestionRoot string
+}
+
+type pluginOpt func(*pluginKwarg)
+
+func WithIngestionFromFolder(root string) pluginOpt {
+	return func(pk *pluginKwarg) {
+		pk.ingestionRoot = root
 	}
 }
 
 type gmailPlugin struct {
-	credentialLocation string
-	tokenLocation      string
-	listenPort         int
+	name          string
+	buildClient   func() (email.Client, error)
+	ingestionRoot string
 }
 
 func (p *gmailPlugin) Name() string {
-	return "gmail"
+	return p.name
 }
 
-func (p *gmailPlugin) Load() ([]agent.Tool, <-chan agent.Event, func(), error) {
-	client, err := BuildClient(p.credentialLocation, p.tokenLocation, p.listenPort, func(token string) {
-		fmt.Printf("To login to the gmail API, follow this link: %s\n", token)
-	})
+type emailSaver interface {
+	InsertEmail(e email.Email) (string, error)
+}
+
+func (p *gmailPlugin) Load() ([]cg.Tool, <-chan cg.Event, func(), error) {
+	client, err := p.buildClient()
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	tools := []agent.Tool{
+	tools := []cg.Tool{
 		&gmailListTool{client},
 		&gmailViewTool{client},
 		&gmailViewTool{client},
 	}
-	events := make(chan agent.Event)
+	events := make(chan cg.Event)
 
 	stop := make(chan struct{}, 1)
 	go func() {
-		latestEmails, err := client.Emails(WithMaxN(1))
+		latestEmails, err := client.Emails(email.WithMaxN(1))
 		if err != nil {
 			return // TODO: Should probably send an error message event
 		}
@@ -59,38 +81,88 @@ func (p *gmailPlugin) Load() ([]agent.Tool, <-chan agent.Event, func(), error) {
 			default:
 			}
 			// This will drop emails if you get more than 10 in the interval, but that seems unlikely.
-			newEmails, err := client.Emails(WithMaxN(10), WithNoEmailsAfter(latestID))
+			newEmails, err := client.Emails(email.WithMaxN(10), email.WithNoEmailsAfter(latestID))
 			if err != nil {
 				continue // TODO: Should probably send an error message event
 			}
 			if len(newEmails.Emails) > 0 {
 				latestID = newEmails.Emails[0].ID
-				for _, email := range newEmails.Emails {
-					if !slices.Contains(email.Labels, InboxLabel) {
+				for _, em := range newEmails.Emails {
+					if !slices.Contains(em.Labels, email.InboxLabel) {
 						continue
 					}
-					events <- emailRecvEvent{email}
+					events <- emailRecvEvent{em}
 				}
 			}
 			time.Sleep(time.Second * 10)
 		}
 	}()
 
+	stop2 := make(chan struct{}, 1)
+	clientEmailSaver, ok := client.(emailSaver)
+	if p.ingestionRoot != "" && ok {
+		go func() {
+			for {
+				select {
+				case <-stop2:
+					return
+				case <-time.After(time.Second * 5):
+				}
+				entries, err := os.ReadDir(p.ingestionRoot)
+				if err != nil {
+					continue // swallow error for now
+				}
+
+				for _, entry := range entries {
+					if entry.IsDir() {
+						continue
+					}
+
+					path := filepath.Join(p.ingestionRoot, entry.Name())
+
+					func() {
+						f, err := os.Open(path)
+						if err != nil {
+							return
+						}
+						defer f.Close()
+
+						// Parse email
+						em, err := ReadEML(f)
+						if err != nil {
+							return // ignore bad files
+						}
+
+						// Insert
+						_, err = clientEmailSaver.InsertEmail(em)
+						if err != nil {
+							return // ignore insert failures
+						}
+					}()
+
+					// Delete regardless of success/failure (hopper semantics)
+					_ = os.Remove(path)
+				}
+			}
+		}()
+	}
+
 	return tools, events, func() {
 		stop <- struct{}{}
+		stop2 <- struct{}{}
 	}, nil
 }
 
 type emailRecvEvent struct {
-	email Email
+	email email.Email
 }
 
 func (e emailRecvEvent) Kind() string {
 	return "gmail_email_recv"
 }
 
-func (e emailRecvEvent) Content() agent.JsonObject {
-	return agent.JsonObject{
+func (e emailRecvEvent) Content() cg.JsonObject {
+	return cg.JsonObject{
 		"email_id":    e.email.ID,
 		"from":        e.email.From,
 		"to":          e.email.To,
@@ -100,11 +172,11 @@ func (e emailRecvEvent) Content() agent.JsonObject {
 }
 
 type gmailListTool struct {
-	client *Client
+	client email.Client
 }
 
-func (t *gmailListTool) Def() agent.ToolDef {
-	return agent.ToolDef{
+func (t *gmailListTool) Def() cg.ToolDef {
+	return cg.ToolDef{
 		Name: "gmail_list",
 		Desc: "Search for some emails (excluding bodies) from gmail. Optionally filter to specific emails. This is paginated - at most 5 emails will be returned at a time, you can then call the tool again with the same arguments but the follow up page ID to get the next page. The entire emails (including bodies) will be returned, so to search through large volumes of emails you should use the filter feature instead. Args: `filter`: [string, required] The filter text to filter by. This can be plaintext, but also supports most search options that the gmail app does (e.g. 'in:sent Dogs' searches for emails related to dogs that are in the sent box. '-category:promotions -category:social -category:updates' searches for emails that are not in those categories). Specify this to be '' (empty string) if no filter (just lists all emails). `page`: [string, required] The page ID to get. This only applies if you are getting the next page of results for a previous query. If you want the first page, specify this to be '' (empty string). After calling you first (and subsequent) calls to this tool, you will recieve a next page id, which you can use to call the tool again with the same args but with that page id, to return the next page of results.",
 	}
@@ -128,7 +200,7 @@ func (t *gmailListTool) Call(args map[string]any) (string, error) {
 		return "", fmt.Errorf("argument 'page' must be a string")
 	}
 
-	resp, err := t.client.Emails(WithMaxN(5), WithPage(page), WithQuery(filter))
+	resp, err := t.client.Emails(email.WithMaxN(5), email.WithPage(page), email.WithQuery(filter))
 	if err != nil {
 		return "", err
 	}
@@ -153,11 +225,11 @@ func (t *gmailListTool) Call(args map[string]any) (string, error) {
 }
 
 type gmailViewTool struct {
-	client *Client
+	client email.Client
 }
 
-func (t *gmailViewTool) Def() agent.ToolDef {
-	return agent.ToolDef{
+func (t *gmailViewTool) Def() cg.ToolDef {
+	return cg.ToolDef{
 		Name: "gmail_view",
 		Desc: "Fetch a single email by ID and return its full content in markdown format, including headers (from, to, subject) and body.",
 	}
